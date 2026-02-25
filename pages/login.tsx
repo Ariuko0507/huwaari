@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 
@@ -46,43 +46,49 @@ export default function Login() {
 
   return (
     <div className="admin-page-bg">
-      <div className="admin-shell max-w-xl">
-        <div className="p-8">
-          <div className="admin-card">
-            <p className="text-xs font-semibold uppercase tracking-wider text-green-600">Huwaari</p>
-            <h1 className="mt-1 text-2xl font-bold text-black">Нэвтрэх</h1>
-            <p className="mt-1 text-sm text-black">Системд нэвтэрч өөрийн хуудас руу орно уу.</p>
+      <div className="mx-auto flex min-h-[calc(100vh-56px)] w-full max-w-xl items-center justify-center p-2">
+        <div className="admin-card w-full border-white/70 bg-white/90 p-8 shadow-2xl backdrop-blur-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-700">Huwaari</p>
+          <h1 className="mt-2 text-3xl font-bold text-slate-900">Нэвтрэх</h1>
+          <p className="mt-2 text-sm text-slate-600">Системд нэвтэрч өөрийн хуудсанд орно уу.</p>
 
-            <div className="mt-6 admin-form">
-              <label className="admin-field">
-                <span className="admin-label">И-мэйл</span>
-                <input
-                  className="admin-input"
-                  placeholder="name@school.edu"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </label>
+          <div className="mt-6 h-px bg-gradient-to-r from-slate-200 via-slate-300 to-slate-200" />
 
-              <label className="admin-field">
-                <span className="admin-label">Нууц үг</span>
-                <input
-                  className="admin-input"
-                  type="password"
-                  placeholder="Нууц үгээ оруулна уу"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleLogin();
-                  }}
-                />
-              </label>
+          <form
+            className="mt-6 admin-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleLogin();
+            }}
+          >
+            <label className="admin-field">
+              <span className="admin-label">И-мэйл</span>
+              <input
+                className="admin-input"
+                type="email"
+                placeholder="name@school.edu"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+              />
+            </label>
 
-              <button className="admin-submit" onClick={handleLogin} disabled={loading}>
-                {loading ? "Нэвтэрч байна..." : "Нэвтрэх"}
-              </button>
-            </div>
-          </div>
+            <label className="admin-field">
+              <span className="admin-label">Нууц үг</span>
+              <input
+                className="admin-input"
+                type="password"
+                placeholder="Нууц үгээ оруулна уу"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </label>
+
+            <button className="admin-submit mt-2 w-full justify-center py-3 text-sm" type="submit" disabled={loading}>
+              {loading ? "Нэвтэрч байна..." : "Нэвтрэх"}
+            </button>
+          </form>
         </div>
       </div>
     </div>

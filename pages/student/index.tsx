@@ -1,4 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/router";
+import WeeklyScheduleBoard from "../../components/WeeklyScheduleBoard";
 import { supabase } from "../../lib/supabaseClient";
 
 type ClassItem = { id: string; name: string };
@@ -26,25 +28,28 @@ type ScheduleRaw = {
 
 type ViewMode = "all" | "my-class";
 
-const dayNames: Record<number, string> = { 1: "Даваа", 2: "Мягмар", 3: "Лхагва", 4: "Пүрэв", 5: "Баасан" };
-
 export default function StudentDashboard() {
+  const router = useRouter();
   const [allSchedules, setAllSchedules] = useState<ScheduleRow[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState("");
   const [myClassId, setMyClassId] = useState("");
+  const [studentId, setStudentId] = useState("");
   const [studentEmail, setStudentEmail] = useState("");
-  const [mode, setMode] = useState<ViewMode>("my-class");
+  const [mode, setMode] = useState<ViewMode>("all");
   const [loading, setLoading] = useState(true);
+  const [checking, setChecking] = useState(true);
 
-  const fetchData = async () => {
+  const fetchData = async (currentStudentId = studentId) => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    setStudentEmail(user?.email || "");
 
     const [classRes, scheduleRes] = await Promise.all([
       supabase.from("classes").select("id,name").order("name", { ascending: true }),
-      supabase.from("schedules").select("id,class_id,day_of_week,start_time,end_time,classes(id,name),subjects(name),rooms(name)").order("day_of_week", { ascending: true }).order("start_time", { ascending: true }),
+      supabase
+        .from("schedules")
+        .select("id,class_id,day_of_week,start_time,end_time,classes(id,name),subjects(name),rooms(name)")
+        .order("day_of_week", { ascending: true })
+        .order("start_time", { ascending: true }),
     ]);
 
     const classRows = (classRes.data || []) as ClassItem[];
@@ -70,8 +75,8 @@ export default function StudentDashboard() {
     }));
     setAllSchedules(rows);
 
-    if (user?.id) {
-      const profileRes = await supabase.from("users").select("class_id").eq("id", user.id).maybeSingle();
+    if (currentStudentId) {
+      const profileRes = await supabase.from("users").select("class_id").eq("id", currentStudentId).maybeSingle();
       const resolvedClassId = (profileRes.data as { class_id?: string } | null)?.class_id || "";
       if (resolvedClassId) {
         setMyClassId(resolvedClassId);
@@ -82,7 +87,35 @@ export default function StudentDashboard() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    const checkAccess = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
+
+      const { data: profile } = await supabase.from("users").select("role").eq("id", user.id).maybeSingle();
+      const role = (profile as { role?: string } | null)?.role;
+
+      if (role !== "student") {
+        if (role === "admin") router.replace("/admin");
+        else if (role === "teacher") router.replace("/teacher");
+        else router.replace("/login");
+        return;
+      }
+
+      setStudentId(user.id);
+      setStudentEmail(user.email || "");
+      setChecking(false);
+      await fetchData(user.id);
+    };
+
+    void checkAccess();
+  }, [router]);
 
   const activeClassId = myClassId || selectedClassId;
   const visibleSchedules = useMemo(() => {
@@ -91,10 +124,26 @@ export default function StudentDashboard() {
     return allSchedules.filter((row) => row.class_id === activeClassId);
   }, [mode, allSchedules, activeClassId]);
 
+  const boardItems = useMemo(
+    () =>
+      visibleSchedules.map((s) => ({
+        id: s.id,
+        day_of_week: s.day_of_week,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        class_name: s.classes?.name || "-",
+        subject_name: s.subjects?.name || "-",
+        room_name: s.rooms?.name || "-",
+      })),
+    [visibleSchedules]
+  );
+
+  if (checking) return null;
+
   return (
     <div className="admin-page-bg">
       <div className="admin-shell">
-        <div className="p-6 grid gap-4">
+        <div className="w-full p-6 grid gap-4">
           <div className="admin-card">
             <p className="text-xs font-semibold uppercase tracking-wider text-green-600">Сурагч</p>
             <h1 className="text-2xl font-bold text-gray-900 mt-1">Хуваарийн самбар</h1>
@@ -111,22 +160,13 @@ export default function StudentDashboard() {
                 <select className="admin-select" value={selectedClassId} onChange={(e) => setSelectedClassId(e.target.value)} disabled={Boolean(myClassId)}>
                   {classes.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
                 </select>
-                <button className="admin-submit" onClick={fetchData}>Шинэчлэх</button>
+                <button className="admin-submit" onClick={() => fetchData()}>Шинэчлэх</button>
               </div>
             </div>
           </div>
 
           <div className="admin-card admin-grid-wrap">
-            {loading ? <p className="admin-empty">Ачааллаж байна...</p> : visibleSchedules.length === 0 ? <p className="admin-empty">Хуваарь олдсонгүй.</p> : (
-              <table className="admin-grid-table">
-                <thead><tr><th className="admin-grid-head">Өдөр</th><th className="admin-grid-head">Цаг</th><th className="admin-grid-head">Анги</th><th className="admin-grid-head">Хичээл</th><th className="admin-grid-head">Кабинет</th></tr></thead>
-                <tbody>
-                  {visibleSchedules.map((s) => (
-                    <tr key={s.id}><td className="admin-grid-cell">{dayNames[s.day_of_week] || s.day_of_week}</td><td className="admin-grid-cell">{s.start_time} - {s.end_time}</td><td className="admin-grid-cell">{s.classes?.name || "-"}</td><td className="admin-grid-cell">{s.subjects?.name || "-"}</td><td className="admin-grid-cell">{s.rooms?.name || "-"}</td></tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+            {loading ? <p className="admin-empty">Ачааллаж байна...</p> : <WeeklyScheduleBoard items={boardItems} />}
           </div>
         </div>
       </div>

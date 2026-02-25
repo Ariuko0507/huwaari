@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
+import WeeklyScheduleBoard from "./WeeklyScheduleBoard";
 import { supabase } from "../lib/supabaseClient";
 
 type ClassItem = { id: string; name: string };
@@ -226,6 +227,12 @@ export default function ScheduleGrid() {
 
   return (
     <div className="admin-form">
+      <h2 className="admin-form-title">Долоо хоногийн матриц харагдац</h2>
+
+      <div className="admin-list-wrap">
+        <WeeklyScheduleBoard items={schedules} emptyText="Хуваарь байхгүй байна." variant="excel" />
+      </div>
+
       <h2 className="admin-form-title">Хуваарь үүсгэх</h2>
 
       <div className="grid gap-3 md:grid-cols-2">
@@ -299,47 +306,6 @@ export default function ScheduleGrid() {
       <div className="flex gap-2">
         <button className="admin-submit" onClick={handleSubmit}>{editingId ? "Шинэчлэх" : "Create"}</button>
         {editingId && <button className="admin-action-btn" onClick={resetForm}>Болих</button>}
-      </div>
-
-      <div className="admin-list-wrap">
-        <p className="admin-list-title">Үүсгэсэн хуваариуд</p>
-        {schedules.length === 0 ? (
-          <p className="admin-empty">Хуваарь байхгүй байна.</p>
-        ) : (
-          <div className="admin-grid-wrap">
-            <table className="admin-grid-table">
-              <thead>
-                <tr>
-                  <th className="admin-grid-head">Өдөр</th>
-                  <th className="admin-grid-head">Цаг</th>
-                  <th className="admin-grid-head">Анги</th>
-                  <th className="admin-grid-head">Багш</th>
-                  <th className="admin-grid-head">Хичээл</th>
-                  <th className="admin-grid-head">Кабинет</th>
-                  <th className="admin-grid-head">Үйлдэл</th>
-                </tr>
-              </thead>
-              <tbody>
-                {schedules.map((s) => (
-                  <tr key={s.id}>
-                    <td className="admin-grid-cell">{dayNames[s.day_of_week]}</td>
-                    <td className="admin-grid-cell">{s.start_time} - {s.end_time}</td>
-                    <td className="admin-grid-cell">{s.class_name}</td>
-                    <td className="admin-grid-cell">{s.teacher_name}</td>
-                    <td className="admin-grid-cell">{s.subject_name}</td>
-                    <td className="admin-grid-cell">{s.room_name}</td>
-                    <td className="admin-grid-cell">
-                      <span className="admin-row-actions">
-                        <button className="admin-action-btn" onClick={() => handleEdit(s)}>Edit</button>
-                        <button className="admin-action-btn danger" onClick={() => handleDelete(s.id)}>Delete</button>
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-﻿type Tab = "classes" | "teachers" | "rooms" | "subjects" | "schedule";
+﻿type Tab = "classes" | "teachers" | "rooms" | "subjects" | "schedule" | "users";
 
 type Props = {
   activeTab: Tab;
@@ -11,6 +11,7 @@ const tabs: Array<{ key: Tab; label: string; icon: string }> = [
   { key: "rooms", label: "Кабинет", icon: "RM" },
   { key: "subjects", label: "Хичээл", icon: "SB" },
   { key: "schedule", label: "Хуваарь", icon: "SC" },
+  { key: "users", label: "Хэрэглэгч", icon: "US" },
 ];
 
 export default function AdminSidebar({ activeTab, setActiveTab }: Props) {

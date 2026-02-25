@@ -5,9 +5,10 @@ import TeacherForm from "./TeacherForm";
 import RoomForm from "./RoomForm";
 import SubjectForm from "./SubjectForm";
 import ScheduleGrid from "./ScheduleGrid";
+import UserCreateForm from "./UserCreateForm";
 import { supabase } from "../lib/supabaseClient";
 
-type Tab = "classes" | "teachers" | "rooms" | "subjects" | "schedule";
+type Tab = "classes" | "teachers" | "rooms" | "subjects" | "schedule" | "users";
 
 type NamedItem = { id: string; name: string };
 
@@ -24,10 +25,11 @@ const tabTitle: Record<Tab, string> = {
   rooms: "Rooms",
   subjects: "Subjects",
   schedule: "Schedule",
+  users: "Users",
 };
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<Tab>("classes");
+  const [activeTab, setActiveTab] = useState<Tab>("schedule");
   const [summary, setSummary] = useState<DashboardSummary>({
     classes: [],
     teachers: [],
@@ -66,6 +68,7 @@ export default function AdminDashboard() {
 
   const activeDescription = useMemo(() => {
     if (activeTab === "schedule") return "Manage weekly schedule and time slots";
+    if (activeTab === "users") return "Create student, teacher, or admin users";
     return `Manage ${tabTitle[activeTab].toLowerCase()} records`;
   }, [activeTab]);
 
@@ -88,6 +91,8 @@ export default function AdminDashboard() {
         return <SubjectForm />;
       case "schedule":
         return <ScheduleGrid />;
+      case "users":
+        return <UserCreateForm />;
     }
   };
 
