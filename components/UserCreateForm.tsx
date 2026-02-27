@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import Users from "./Users";
 
 type Role = "student" | "teacher" | "admin";
 type ClassItem = { id: string; name: string };
@@ -12,6 +13,8 @@ export default function UserCreateForm() {
   const [classId, setClassId] = useState("");
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const selectedClassName = classes.find((item) => item.id === classId)?.name || "";
 
   useEffect(() => {
     const fetchClasses = async () => {
@@ -66,7 +69,12 @@ export default function UserCreateForm() {
       return;
     }
 
-    alert("Хэрэглэгч амжилттай нэмэгдлээ.");
+    const successMessage =
+      role === "student" && selectedClassName
+        ? `Сурагч амжилттай нэмэгдлээ. Анги: ${selectedClassName}`
+        : "Хэрэглэгч амжилттай нэмэгдлээ.";
+    alert(successMessage);
+
     setEmail("");
     setPassword("");
     setName("");
@@ -124,23 +132,30 @@ export default function UserCreateForm() {
       )}
 
       {role === "student" && (
-        <label className="admin-field">
-          <span className="admin-label">Анги</span>
-          <select className="admin-select" value={classId} onChange={(e) => setClassId(e.target.value)}>
-            <option value="">Анги сонгох</option>
-            {classes.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <>
+          <label className="admin-field">
+            <span className="admin-label">Анги</span>
+            <select className="admin-select" value={classId} onChange={(e) => setClassId(e.target.value)}>
+              <option value="">Анги сонгох</option>
+              {classes.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-sm text-gray-600">{selectedClassName ? `Сонгосон анги: ${selectedClassName}` : "Анги сонгоогүй байна."}</p>
+        </>
       )}
 
       <div className="flex gap-2">
         <button className="admin-submit" onClick={handleSubmit} disabled={loading}>
           {loading ? "Нэмж байна..." : "Хэрэглэгч нэмэх"}
         </button>
+      </div>
+
+      <div className="mt-6">
+        <Users />
       </div>
     </div>
   );

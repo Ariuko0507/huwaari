@@ -1,122 +1,92 @@
-﻿type WeeklyScheduleItem = {
+﻿import { useMemo } from "react";
+
+type Item = {
   id: string;
   day_of_week: number;
   start_time: string;
   end_time: string;
   class_name: string;
   subject_name: string;
-  room_name?: string;
-  teacher_name?: string;
+  room_name: string;
 };
 
 type Props = {
-  items: WeeklyScheduleItem[];
-  emptyText?: string;
-  variant?: "default" | "excel";
+  items: Item[];
 };
 
-const dayNames: Record<number, string> = {
-  1: "1 дэх өдөр (Даваа)",
-  2: "2 дахь өдөр (Мягмар)",
-  3: "3 дахь өдөр (Лхагва)",
-  4: "4 дэх өдөр (Пүрэв)",
-  5: "5 дахь өдөр (Баасан)",
+const DAYS = [1, 2, 3, 4, 5];
+
+const DAY_LABEL: Record<number, string> = {
+  1: "1 дэх",
+  2: "2 дахь",
+  3: "3 дахь",
+  4: "4 дахь",
+  5: "5 дахь",
 };
 
-function sortTimes(a: string, b: string): number {
-  return a.localeCompare(b);
-}
+const TIME_SLOTS = [
+  { start: "08:00", end: "09:25" },
+  { start: "09:25", end: "10:50" },
+  { start: "10:50", end: "12:10" },
+  { start: "12:10", end: "13:35" },
+];
 
-function normalizeTime(raw: string): string {
-  return raw.slice(0, 5);
-}
-
-function toAmPmLabel(time24: string): string {
-  const [hRaw, mRaw] = time24.split(":");
-  const hour = Number(hRaw);
-  const minute = Number(mRaw);
-  const ampm = hour >= 12 ? "PM" : "AM";
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
-  const mm = String(minute).padStart(2, "0");
-  return `${hour12}:${mm}:00 ${ampm}`;
-}
-
-export default function WeeklyScheduleBoard({ items, emptyText = "Хуваарь олдсонгүй.", variant = "default" }: Props) {
-  if (items.length === 0) {
-    return <p className="admin-empty">{emptyText}</p>;
-  }
-
-  const classNames = Array.from(new Set(items.map((x) => x.class_name))).sort((a, b) => a.localeCompare(b));
-  const timeSlots =
-    variant === "excel"
-      ? Array.from(new Set(["08:00", "09:25", "10:50", "12:10", ...items.map((x) => normalizeTime(x.start_time))])).sort(sortTimes)
-      : Array.from(new Set(items.map((x) => `${x.start_time}-${x.end_time}`)))
-          .sort((a, b) => sortTimes(a, b))
-          .map((key) => {
-            const [start, end] = key.split("-");
-            return { key, start, end };
-          });
-
-  const findCell = (day: number, className: string, timeKey: string): WeeklyScheduleItem | undefined => {
-    const [start, end] = variant === "excel" ? [timeKey, ""] : timeKey.split("-");
-    return items.find(
-      (x) =>
-        x.day_of_week === day &&
-        x.class_name === className &&
-        normalizeTime(x.start_time) === normalizeTime(start) &&
-        (variant === "excel" || normalizeTime(x.end_time) === normalizeTime(end))
-    );
-  };
+export default function WeeklyScheduleBoard({ items }: Props) {
+  const lessonMap = useMemo(() => {
+    const map = new Map<string, Item[]>();
+    items.forEach((i) => {
+      const key = `${i.day_of_week}|${i.start_time.slice(0, 5)}`;
+      const list = map.get(key) || [];
+      list.push(i);
+      map.set(key, list);
+    });
+    return map;
+  }, [items]);
 
   return (
-    <div className={variant === "excel" ? "schedule-board-wrap schedule-board-wrap-excel" : "schedule-board-wrap"}>
-      <table className={variant === "excel" ? "schedule-board-table schedule-board-table-excel" : "schedule-board-table"}>
+    <div className="overflow-auto">
+      <table className="w-full border-collapse text-sm">
         <thead>
           <tr>
-            <th className={variant === "excel" ? "schedule-board-head schedule-board-head-excel" : "schedule-board-head"}>Цаг</th>
-            {classNames.map((name) => (
-              <th key={name} className={variant === "excel" ? "schedule-board-head schedule-board-head-excel" : "schedule-board-head"}>
-                {name}
+            <th className="border p-2 w-28">Цаг</th>
+            {DAYS.map((day) => (
+              <th key={day} className="border p-2">
+                {DAY_LABEL[day]}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody>
-          {[1, 2, 3, 4, 5].flatMap((day) => {
-            const dayRows = timeSlots.map((slot) => (
-              <tr key={`${day}-${typeof slot === "string" ? slot : slot.key}`}>
-                <td className={variant === "excel" ? "schedule-board-time schedule-board-time-excel" : "schedule-board-time"}>
-                  {variant === "excel" ? toAmPmLabel(slot as string) : `${(slot as { start: string; end: string }).start} - ${(slot as { start: string; end: string }).end}`}
-                </td>
-                {classNames.map((className) => {
-                  const key = typeof slot === "string" ? slot : slot.key;
-                  const cell = findCell(day, className, key);
-                  return (
-                    <td key={`${day}-${key}-${className}`} className={variant === "excel" ? "schedule-board-cell schedule-board-cell-excel" : "schedule-board-cell"}>
-                      {cell ? (
-                        <div className="schedule-board-content">
-                          <div className="schedule-board-subject">{cell.subject_name}</div>
-                          {cell.room_name ? <div className="schedule-board-meta">{cell.room_name}</div> : null}
-                          {cell.teacher_name ? <div className="schedule-board-meta">{cell.teacher_name}</div> : null}
-                        </div>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ));
 
-            return [
-              <tr key={`day-${day}`}>
-                <td className={variant === "excel" ? "schedule-board-day schedule-board-day-excel" : "schedule-board-day"} colSpan={classNames.length + 1}>
-                  {dayNames[day]}
-                </td>
-              </tr>,
-              ...dayRows,
-            ];
-          })}
+        <tbody>
+          {TIME_SLOTS.map((slot) => (
+            <tr key={slot.start}>
+              <td className="border p-2 font-medium">
+                {slot.start} - {slot.end}
+              </td>
+
+              {DAYS.map((day) => {
+                const lessons = lessonMap.get(`${day}|${slot.start}`) || [];
+
+                return (
+                  <td key={day} className="border p-2 align-top">
+                    {lessons.length > 0 ? (
+                      <div className="space-y-2">
+                        {lessons.map((lesson) => (
+                          <div key={lesson.id} className="rounded border border-slate-200 p-2">
+                            <div className="font-semibold">{lesson.subject_name}</div>
+                            <div className="text-xs text-gray-600">{lesson.class_name}</div>
+                            <div className="text-xs text-gray-500">{lesson.room_name}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-gray-300 text-center">-</div>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

@@ -1,71 +1,78 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
-import WeeklyScheduleBoard from "../../components/WeeklyScheduleBoard";
+import ScheduleMatrixView from "../../components/ScheduleMatrixView";
 import { supabase } from "../../lib/supabaseClient";
 
-type ScheduleRow = {
-  id: string;
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
-  classes: { name: string } | null;
-  subjects: { id: string; name: string; teacher_id: string | null } | null;
-  rooms: { name: string } | null;
-};
-
-type ScheduleRaw = {
-  id: string;
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
-  classes: Array<{ name: string }> | null;
-  subjects: Array<{ id: string; name: string; teacher_id: string | null }> | null;
-  rooms: Array<{ name: string }> | null;
-};
-
 type ViewMode = "all" | "mine";
+type ClassItem = { id: string; name: string };
+type ScheduleItem = {
+  id: string;
+  class_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  subject_name: string;
+  room_name: string;
+  teacher_name: string;
+  teacher_id: string | null;
+};
+
+type BoardResponse = {
+  classes?: ClassItem[];
+  schedules?: ScheduleItem[];
+  role?: string;
+  userId?: string;
+  message?: string;
+};
 
 export default function TeacherDashboard() {
   const router = useRouter();
-  const [allSchedules, setAllSchedules] = useState<ScheduleRow[]>([]);
-  const [mySchedules, setMySchedules] = useState<ScheduleRow[]>([]);
   const [mode, setMode] = useState<ViewMode>("all");
-  const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [teacherEmail, setTeacherEmail] = useState("");
   const [teacherId, setTeacherId] = useState("");
+  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
 
-  const fetchSchedule = async (currentTeacherId = teacherId) => {
+  const fetchSchedules = useCallback(async () => {
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from("schedules")
-      .select("id,day_of_week,start_time,end_time,classes(name),subjects(id,name,teacher_id),rooms(name)")
-      .order("day_of_week", { ascending: true })
-      .order("start_time", { ascending: true });
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const accessToken = session?.access_token;
+    if (!accessToken) {
+      router.replace("/login");
+      return;
+    }
 
-    if (error) {
-      alert(error.message);
-      setAllSchedules([]);
-      setMySchedules([]);
+    const res = await fetch(`/api/schedule/board?t=${Date.now()}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    });
+    const data = (await res.json()) as BoardResponse;
+
+    if (!res.ok) {
+      alert(data.message || "Хуваарь уншихад алдаа гарлаа.");
+      setClasses([]);
+      setSchedules([]);
       setLoading(false);
       return;
     }
 
-    const rows: ScheduleRow[] = ((data || []) as ScheduleRaw[]).map((row) => ({
-      id: row.id,
-      day_of_week: row.day_of_week,
-      start_time: row.start_time,
-      end_time: row.end_time,
-      classes: row.classes?.[0] || null,
-      subjects: row.subjects?.[0] || null,
-      rooms: row.rooms?.[0] || null,
-    }));
+    if (data.role !== "teacher") {
+      if (data.role === "admin") router.replace("/admin");
+      else if (data.role === "student") router.replace("/student");
+      else router.replace("/login");
+      return;
+    }
 
-    setAllSchedules(rows);
-    setMySchedules(currentTeacherId ? rows.filter((row) => row.subjects?.teacher_id === currentTeacherId) : []);
+    setTeacherId(data.userId || "");
+    setClasses(data.classes || []);
+    setSchedules(data.schedules || []);
     setLoading(false);
-  };
+  }, [router]);
 
   useEffect(() => {
     const checkAccess = async () => {
@@ -78,39 +85,48 @@ export default function TeacherDashboard() {
         return;
       }
 
-      const { data: profile } = await supabase.from("users").select("role").eq("id", user.id).maybeSingle();
-      const role = (profile as { role?: string } | null)?.role;
-
-      if (role !== "teacher") {
-        if (role === "admin") router.replace("/admin");
-        else if (role === "student") router.replace("/student");
-        else router.replace("/login");
-        return;
-      }
-
-      setTeacherId(user.id);
       setTeacherEmail(user.email || "");
       setChecking(false);
-      await fetchSchedule(user.id);
+      await fetchSchedules();
     };
 
     void checkAccess();
-  }, [router]);
+  }, [router, fetchSchedules]);
 
-  const visibleSchedules = useMemo(() => (mode === "all" ? allSchedules : mySchedules), [mode, allSchedules, mySchedules]);
+  const filteredSchedules = useMemo(
+    () => (mode === "mine" ? schedules.filter((s) => s.teacher_id === teacherId) : schedules),
+    [mode, schedules, teacherId]
+  );
 
-  const boardItems = useMemo(
+  const fallbackClasses = useMemo(() => {
+    const map = new Map<string, ClassItem>();
+    filteredSchedules.forEach((s) => {
+      if (s.class_id) map.set(s.class_id, { id: s.class_id, name: s.class_id });
+    });
+    return Array.from(map.values());
+  }, [filteredSchedules]);
+
+  const matrixClasses = useMemo(() => {
+    if (classes.length > 0) {
+      const ids = new Set(filteredSchedules.map((s) => s.class_id));
+      return mode === "mine" ? classes.filter((c) => ids.has(c.id)) : classes;
+    }
+    return fallbackClasses;
+  }, [mode, classes, filteredSchedules, fallbackClasses]);
+
+  const matrixItems = useMemo(
     () =>
-      visibleSchedules.map((s) => ({
+      filteredSchedules.map((s) => ({
         id: s.id,
+        class_id: s.class_id,
         day_of_week: s.day_of_week,
         start_time: s.start_time,
         end_time: s.end_time,
-        class_name: s.classes?.name || "-",
-        subject_name: s.subjects?.name || "-",
-        room_name: s.rooms?.name || "-",
+        subject_name: s.subject_name,
+        room_name: s.room_name,
+        teacher_name: s.teacher_name,
       })),
-    [visibleSchedules]
+    [filteredSchedules]
   );
 
   if (checking) return null;
@@ -118,25 +134,49 @@ export default function TeacherDashboard() {
   return (
     <div className="admin-page-bg">
       <div className="admin-shell">
-        <div className="w-full p-6 grid gap-4">
-          <div className="admin-card">
+        <div className="w-full max-w-5xl mx-auto p-6 space-y-6">
+          <div className="admin-card p-5">
             <p className="text-xs font-semibold uppercase tracking-wider text-green-600">Багш</p>
             <h1 className="text-2xl font-bold text-gray-900 mt-1">Хуваарийн самбар</h1>
-            <p className="text-sm text-gray-600 mt-1">{teacherEmail ? `Нэвтэрсэн багш: ${teacherEmail}` : "Нэвтэрсэн хэрэглэгч олдсонгүй"}</p>
+            <p className="text-sm text-gray-600 mt-1">
+              {teacherEmail ? `Нэвтэрсэн багш: ${teacherEmail}` : "Нэвтэрсэн хэрэглэгч олдсонгүй"}
+            </p>
           </div>
 
-          <div className="admin-card">
-            <div className="flex flex-wrap gap-2 items-center justify-between">
-              <div className="flex gap-2">
-                <button onClick={() => setMode("all")} className={`px-4 py-2 rounded-md border text-sm font-semibold ${mode === "all" ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-300 text-slate-700"}`}>Нийт хуваарь</button>
-                <button onClick={() => setMode("mine")} className={`px-4 py-2 rounded-md border text-sm font-semibold ${mode === "mine" ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-300 text-slate-700"}`}>Миний хуваарь</button>
-              </div>
-              <button className="admin-submit" onClick={() => fetchSchedule()}>Шинэчлэх</button>
+          <div className="admin-card p-6 space-y-6">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setMode("all")}
+                className={`px-4 py-2 rounded-md border text-sm font-semibold transition ${
+                  mode === "all"
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "bg-white border-slate-300 text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                Нийт хуваарь
+              </button>
+
+              <button
+                onClick={() => setMode("mine")}
+                className={`px-4 py-2 rounded-md border text-sm font-semibold transition ${
+                  mode === "mine"
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "bg-white border-slate-300 text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                Миний хуваарь
+              </button>
             </div>
-          </div>
 
-          <div className="admin-card admin-grid-wrap">
-            {loading ? <p className="admin-empty">Ачааллаж байна...</p> : <WeeklyScheduleBoard items={boardItems} />}
+            <div className="border-t pt-6">
+              {loading ? (
+                <p className="text-sm text-gray-500">Ачааллаж байна...</p>
+              ) : matrixItems.length > 0 && matrixClasses.length > 0 ? (
+                <ScheduleMatrixView classes={matrixClasses} schedules={matrixItems} />
+              ) : (
+                <p className="text-sm text-gray-500">Хуваарь олдсонгүй.</p>
+              )}
+            </div>
           </div>
         </div>
       </div>
